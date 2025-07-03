@@ -1,6 +1,8 @@
 import discord
 import os
 import google.generativeai as genai
+from flask import Flask
+from threading import Thread
 from dotenv import load_dotenv
 
 # Carga las variables de entorno desde el archivo .env
@@ -73,8 +75,24 @@ async def reset_command(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("No tienes ningún historial de conversación para borrar.", ephemeral=True)
 
+# --- Keep-alive web server para Replit ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "El bot está en línea y funcionando."
+
+def run():
+  app.run(host='0.0.0.0',port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# -----------------------------------------
+
 # Inicia el bot con el token y un manejo de errores global para mayor estabilidad
 try:
+    keep_alive()
     client.run(DISCORD_TOKEN)
 except Exception as e:
     print(f"Error CRÍTICO al ejecutar el bot: {e}")
