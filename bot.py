@@ -8,6 +8,29 @@ from dotenv import load_dotenv
 
 # Carga las variables de entorno desde el archivo .env
 load_dotenv()
+
+# --- Verificación de Secretos Críticos ---
+import sys
+
+print("Iniciando verificación de secretos...")
+required_secrets = ["DISCORD_TOKEN", "GOOGLE_API_KEY", "GUILD_ID", "ADMIN_CHANNEL_ID"]
+missing_secrets = [secret for secret in required_secrets if not os.getenv(secret)]
+
+if missing_secrets:
+    print("="*50)
+    print("ERROR CRÍTICO: FALTAN VARIABLES DE ENTORNO (SECRETS)")
+    print("El bot no puede arrancar porque no se encontraron los siguientes secretos:")
+    for secret in missing_secrets:
+        print(f"  - {secret}")
+    print("\nPor favor, ve a la sección 'Secrets' en Replit y asegúrate de que:")
+    print("1. Todos los secretos de la lista de arriba existen.")
+    print("2. Los nombres (Keys) están escritos EXACTAMENTE como aparecen aquí.")
+    print("3. Ningún valor (Value) está vacío.")
+    print("="*50)
+    sys.exit(1) # Detiene el programa con un error claro
+
+print("✅ Todos los secretos críticos han sido cargados correctamente.")
+# --- Fin de la Verificación ---
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
