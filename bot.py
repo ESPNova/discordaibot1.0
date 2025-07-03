@@ -1,6 +1,7 @@
 import discord
 import os
 import google.generativeai as genai
+import json
 from flask import Flask
 from threading import Thread
 from dotenv import load_dotenv
@@ -89,6 +90,73 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 # -----------------------------------------
+
+# --- Sistema de Seguridad por IA ---
+ADMIN_CHANNEL_ID = os.getenv("ADMIN_CHANNEL_ID")
+SERVER_RULES = ""
+try:
+    with open('rules.txt', 'r', encoding='utf-8') as f:
+        SERVER_RULES = f.read()
+except FileNotFoundError:
+    print("ADVERTENCIA: El archivo rules.txt no se encontró. El sistema de seguridad no funcionará sin él.")
+    SERVER_RULES = "No se han definido reglas."
+
+@client.event
+async def on_message(message):
+    if message.author == client.user or message.author.bot:
+        return
+
+    if message.content.startswith('/'):
+        return
+
+    if not ADMIN_CHANNEL_ID or not SERVER_RULES or SERVER_RULES == "No se han definido reglas.":
+        return
+
+    try:
+        security_prompt = (
+            "Eres un moderador de Discord de IA llamado 'SecurityGuard'. Tu única tarea es analizar un mensaje de un usuario y determinar si infringe las reglas del servidor. Debes ser muy preciso y evitar falsos positivos.\n\n"
+            f"--- REGLAS DEL SERVIDOR ---\n{SERVER_RULES}\n--------------------------\n\n"
+            f"--- MENSAJE A ANALIZAR ---\nUsuario: {message.author.display_name}\nMensaje: \"{message.content}\"\n--------------------------\n\n"
+            "--- ANÁLISIS ---\n"
+            "1. ¿El mensaje infringe alguna de las reglas del servidor basándote en su contenido y contexto? Responde solo 'Sí' o 'No'.\n"
+            "2. Si la respuesta es 'Sí', ¿qué regla específica se ha infringido? Cita el número y el texto de la regla.\n"
+            "3. Si la respuesta es 'Sí', ¿cuál es tu recomendación de penalización? Elige una de estas opciones: [Warn, Mute (1 hora), Kick, Ban].\n"
+            "4. Si la respuesta es 'Sí', proporciona una breve justificación (1-2 frases) de por qué crees que se ha infringido la regla.\n\n"
+            "--- FORMATO DE RESPUESTA ---\n"
+            "Proporciona tu respuesta en un formato JSON estricto. Si no hay infracción, el valor de 'infraccion' debe ser 'No'. Ejemplo:\n"
+            '{\n' \
+            '  "infraccion": "Sí",\n' \
+            '  "regla_infringida": "Regla 2: No hacer spam.",\n' \
+            '  "penalizacion_recomendada": "Mute (1 hora)",\n' \
+            '  "justificacion": "El usuario ha enviado el mismo mensaje varias veces seguidas."\n' \
+            '}'
+        )
+
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        response = await model.generate_content_async(security_prompt)
+        
+        cleaned_response = response.text.strip().replace('```json', '').replace('```', '')
+        analysis = json.loads(cleaned_response)
+
+        if analysis.get("infraccion") == "Sí":
+            admin_channel = client.get_channel(int(ADMIN_CHANNEL_ID))
+            if admin_channel:
+                embed = discord.Embed(
+                    title="⚠️ Alerta de Seguridad: Posible Infracción de Reglas",
+                    color=discord.Color.red()
+                )
+                embed.add_field(name="👤 Usuario", value=message.author.mention, inline=False)
+                embed.add_field(name="📜 Regla Infringida", value=analysis.get("regla_infringida", "No especificada"), inline=False)
+                embed.add_field(name="💬 Mensaje Original", value=f"```{message.content}```", inline=False)
+                embed.add_field(name="⚖️ Penalización Recomendada", value=analysis.get("penalizacion_recomendada", "No especificada"), inline=False)
+                embed.add_field(name="🧠 Justificación de la IA", value=analysis.get("justificacion", "No especificada"), inline=False)
+                embed.add_field(name="🔗 Enlace al Mensaje", value=f"[Ir al mensaje]({message.jump_url})", inline=False)
+                embed.set_footer(text="Este es un análisis automático por IA. Por favor, verifique antes de actuar.")
+                
+                await admin_channel.send(embed=embed)
+
+    except Exception as e:
+        print(f"Error en el sistema de seguridad on_message: {e}")
 
 # Inicia el bot con el token y un manejo de errores global para mayor estabilidad
 try:
